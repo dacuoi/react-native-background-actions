@@ -7,6 +7,10 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.Context;
 import android.content.Intent;
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -14,6 +18,7 @@ import android.os.Bundle;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import androidx.core.content.ContextCompat;
 
 import com.facebook.react.HeadlessJsTaskService;
 import com.facebook.react.bridge.Arguments;
@@ -23,6 +28,19 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
 
     public static final int SERVICE_NOTIFICATION_ID = 92901;
     private static final String CHANNEL_ID = "RN_BACKGROUND_ACTIONS_CHANNEL";
+    private static Bitmap getBitmapFromDrawable(Context context, int resId) {
+        Drawable drawable = ContextCompat.getDrawable(context, resId);
+        if (drawable instanceof BitmapDrawable) {
+            return ((BitmapDrawable) drawable).getBitmap();
+        }
+        Bitmap bitmap = Bitmap.createBitmap(drawable.getIntrinsicWidth(),
+                drawable.getIntrinsicHeight(),
+                Bitmap.Config.ARGB_8888);
+        Canvas canvas = new Canvas(bitmap);
+        drawable.setBounds(0, 0, canvas.getWidth(), canvas.getHeight());
+        drawable.draw(canvas);
+        return bitmap;
+    }
 
     @SuppressLint("UnspecifiedImmutableFlag")
     @NonNull
@@ -50,14 +68,27 @@ final public class RNBackgroundActionsTask extends HeadlessJsTaskService {
         } else {
             contentIntent = PendingIntent.getActivity(context, 0, notificationIntent, PendingIntent.FLAG_UPDATE_CURRENT);
         }
+        // 🔥 Tạo Intent để xử lý nút Stop
+        Intent stopIntent = new Intent(context, StopServiceReceiver.class);
+        PendingIntent stopPendingIntent = PendingIntent.getBroadcast(
+                context, 0, stopIntent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        // 🖼️ Decode ảnh từ URI
+        Bitmap largeIcon = getBitmapFromDrawable(context, iconInt);
         final NotificationCompat.Builder builder = new NotificationCompat.Builder(context, CHANNEL_ID)
                 .setContentTitle(taskTitle)
                 .setContentText(taskDesc)
                 .setSmallIcon(iconInt)
+                .setLargeIcon(largeIcon) // Ảnh bên phải trong chế độ collapsed
                 .setContentIntent(contentIntent)
                 .setOngoing(true)
                 .setPriority(NotificationCompat.PRIORITY_MIN)
-                .setColor(color);
+                .setColor(color)
+                .addAction(new NotificationCompat.Action(
+                        android.R.drawable.ic_delete, // Icon nhỏ của action (có thể đổi)
+                        "Stop",
+                        stopPendingIntent
+                ))
+                ;
 
         final Bundle progressBarBundle = bgOptions.getProgressBar();
         if (progressBarBundle != null) {
